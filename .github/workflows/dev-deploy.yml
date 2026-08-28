@@ -1,0 +1,42 @@
+name: dev-deploy
+
+on:
+  push:
+    branches: [dev]
+
+jobs:
+  changes:
+    name: Detect changed packages
+    runs-on: ubuntu-latest
+    outputs:
+      common:   ${{ steps.filter.outputs.common }}
+      projectA: ${{ steps.filter.outputs.projectA }}
+      projectB: ${{ steps.filter.outputs.projectB }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            common:
+              - 'packages/common/**'
+            projectA:
+              - 'packages/projectA/**'
+            projectB:
+              - 'packages/projectB/**'
+
+  deploy-projectA:
+    name: Deploy projectA
+    needs: changes
+    if: needs.changes.outputs.projectA == 'true' || needs.changes.outputs.common == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "MOCK deploy projectA -> dev (branch=shared)"
+
+  deploy-projectB:
+    name: Deploy projectB
+    needs: changes
+    if: needs.changes.outputs.projectB == 'true' || needs.changes.outputs.common == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "MOCK deploy projectB -> dev (branch=shared)"

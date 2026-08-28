@@ -1,0 +1,17 @@
+name: feature-cleanup
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [dev]
+
+jobs:
+  cleanup:
+    name: Destroy ephemeral copy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compute branch slug
+        id: slug
+        run: echo "slug=$(echo '${{ github.head_ref }}' | tr '/' '_')" >> "$GITHUB_OUTPUT"
+      - name: Mock destroy
+        run: echo "MOCK destroy -> prefix [${{ steps.slug.outputs.slug }}] (merged=${{ github.event.pull_request.merged }})"

@@ -1,0 +1,29 @@
+name: release
+
+on:
+  push:
+    tags: ['*/*/*/v*']          # {project}/{country}/{env}/vX.Y.Z
+
+jobs:
+  parse:
+    name: Parse tag
+    runs-on: ubuntu-latest
+    outputs:
+      project:     ${{ steps.p.outputs.project }}
+      country:     ${{ steps.p.outputs.country }}
+      environment: ${{ steps.p.outputs.environment }}
+    steps:
+      - id: p
+        run: |
+          ref="${GITHUB_REF_NAME}"
+          echo "project=$(echo "$ref"     | cut -d/ -f1)" >> "$GITHUB_OUTPUT"
+          echo "country=$(echo "$ref"     | cut -d/ -f2)" >> "$GITHUB_OUTPUT"
+          echo "environment=$(echo "$ref" | cut -d/ -f3)" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy
+    needs: parse
+    runs-on: ubuntu-latest
+    environment: ${{ needs.parse.outputs.environment }}   # test -> auto · prod -> gated
+    steps:
+      - run: echo "MOCK deploy ${{ needs.parse.outputs.project }}/${{ needs.parse.outputs.country }} -> ${{ needs.parse.outputs.environment }}"
