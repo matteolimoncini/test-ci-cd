@@ -42,6 +42,9 @@ jobs:
           echo "databricks.yml atteso: $BUNDLE"
           if [ -f "$BUNDLE" ]; then
             echo "  -> trovato in: $(realpath "$BUNDLE")"
+            echo "----- contenuto $BUNDLE -----"
+            cat "$BUNDLE"
+            echo "----- fine -----"
           else
             echo "  -> ERRORE: $BUNDLE non trovato" >&2
             exit 1
