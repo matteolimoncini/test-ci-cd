@@ -1,9 +1,8 @@
 name: feature-deploy
 
 on:
-  pull_request:
-    types: [opened, synchronize]
-    branches: [dev]
+  workflow_dispatch:            # bottone "Run workflow": deploy on-demand da qualsiasi branch
+
 
 jobs:
   deploy:
@@ -12,6 +11,10 @@ jobs:
     steps:
       - name: Compute branch slug
         id: slug
-        run: echo "slug=$(echo '${{ github.head_ref }}' | tr '/' '_')" >> "$GITHUB_OUTPUT"
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}   # head_ref: PR · ref_name: run manuale
+        run: echo "slug=$(echo "$BRANCH" | tr '/' '_')" >> "$GITHUB_OUTPUT"
       - name: Mock deploy
-        run: echo "MOCK ephemeral deploy -> prefix [${{ steps.slug.outputs.slug }}]"
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: echo "MOCK ephemeral deploy -> prefix [${{ steps.slug.outputs.slug }}] (branch=$BRANCH)"
