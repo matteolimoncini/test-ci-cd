@@ -3,18 +3,64 @@ name: feature-deploy
 on:
   workflow_dispatch:            # bottone "Run workflow": deploy on-demand da qualsiasi branch
 
-
 jobs:
   deploy:
     name: Ephemeral deploy
     runs-on: ubuntu-latest
     steps:
-      - name: Compute branch slug
-        id: slug
-        env:
-          BRANCH: ${{ github.head_ref || github.ref_name }}   # head_ref: PR · ref_name: run manuale
-        run: echo "slug=$(echo "$BRANCH" | tr '/' '_')" >> "$GITHUB_OUTPUT"
-      - name: Mock deploy
+      - uses: actions/checkout@v4
+
+      - name: Resolve target bundle
+        id: meta
         env:
           BRANCH: ${{ github.head_ref || github.ref_name }}
-        run: echo "MOCK ephemeral deploy -> prefix [${{ steps.slug.outputs.slug }}] (branch=$BRANCH)"
+        run: |
+          slug=$(echo "$BRANCH" | tr '/' '_')
+          project=$(echo "$BRANCH" | cut -d/ -f2)      # feature/<project>/<country>/<desc>
+          country=$(echo "$BRANCH" | cut -d/ -f3)
+          country_bundle="packages/$project/countries/$country/databricks.yml"
+          project_bundle="packages/$project/databricks.yml"
+          if [ -f "$country_bundle" ]; then
+            bundle="$country_bundle"; scope="country ($country)"
+          else
+            bundle="$project_bundle"; scope="project (shared)"
+          fi
+          {
+            echo "slug=$slug"
+            echo "project=$project"
+            echo "country=$country"
+            echo "bundle=$bundle"
+            echo "scope=$scope"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify databricks.yml
+        env:
+          BUNDLE: ${{ steps.meta.outputs.bundle }}
+          SCOPE:  ${{ steps.meta.outputs.scope }}
+        run: |
+          echo "Scope: $SCOPE"
+          echo "databricks.yml atteso: $BUNDLE"
+          if [ -f "$BUNDLE" ]; then
+            echo "  -> trovato in: $(realpath "$BUNDLE")"
+          else
+            echo "  -> ERRORE: $BUNDLE non trovato" >&2
+            exit 1
+          fi
+
+      - name: Mock deploy
+        env:
+          BRANCH:  ${{ github.head_ref || github.ref_name }}
+          SLUG:    ${{ steps.meta.outputs.slug }}
+          PROJECT: ${{ steps.meta.outputs.project }}
+          COUNTRY: ${{ steps.meta.outputs.country }}
+          BUNDLE:  ${{ steps.meta.outputs.bundle }}
+          SCOPE:   ${{ steps.meta.outputs.scope }}
+        run: |
+          bundle_dir=$(dirname "$BUNDLE")
+          echo "MOCK ephemeral deploy"
+          echo "  branch : $BRANCH"
+          echo "  project: $PROJECT"
+          echo "  country: $COUNTRY"
+          echo "  scope  : $SCOPE"
+          echo "  bundle : $BUNDLE"
+          echo "MOCK cmd: cd $bundle_dir && databricks bundle deploy -t dev --var branch=$SLUG"
