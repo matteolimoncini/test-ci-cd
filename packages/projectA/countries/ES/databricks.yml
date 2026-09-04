@@ -15,7 +15,7 @@ variables:
 resources:
   jobs:
     projectA_sample_job:
-      name: "[${bundle.target}][${var.branch}] projectA - sample job"
+      name: "projectA - sample job"
       tags:
         project: projectA
         managed_by: dab
@@ -41,14 +41,14 @@ targets:
     mode: development
     default: true
     presets:
-      name_prefix: ""
+      name_prefix: "[dev][${var.branch}] "
     workspace:
       host: https://dbc-d01c4c3a-2fbf.cloud.databricks.com
 
   prod:
     mode: production
     presets:
-      name_prefix: ""
+      name_prefix: "[prod][${var.branch}] "
     workspace:
       host: https://dbc-6fe91c27-e36a.cloud.databricks.com
 
