@@ -1,0 +1,54 @@
+# Databricks Asset Bundle - projectA (shared / project-level)
+# Fallback usato quando non esiste un bundle specifico per country.
+# Docs: https://docs.databricks.com/dev-tools/bundles/index.html
+bundle:
+  name: projectA
+
+variables:
+  notification_email:
+    description: Email address used for job run notifications.
+    default: data-team@example.com
+  branch:
+    description: Slug del branch usato come prefisso per i deploy effimeri.
+    default: ""
+
+# Simple resources deployed by this bundle
+resources:
+  jobs:
+    projectA_shared_sample_job:
+      name: "projectA - shared sample job"
+      tags:
+        project: projectA
+        scope: shared
+        managed_by: dab
+      tasks:
+        - task_key: ingest
+          notebook_task:
+            notebook_path: ./ingest.py
+        - task_key: transform
+          depends_on:
+            - task_key: ingest
+          notebook_task:
+            notebook_path: ./transform.py
+      schedule:
+        quartz_cron_expression: "0 0 4 * * ?"
+        timezone_id: Europe/Rome
+        pause_status: PAUSED
+      email_notifications:
+        on_failure:
+          - ${var.notification_email}
+
+targets:
+  dev:
+    default: true
+    presets:
+      name_prefix: "[dev]${var.branch} "
+    workspace:
+      host: https://dbc-d01c4c3a-2fbf.cloud.databricks.com
+
+  prod:
+    mode: production
+    presets:
+      name_prefix: "[prod]${var.branch} "
+    workspace:
+      host: https://dbc-6fe91c27-e36a.cloud.databricks.com
