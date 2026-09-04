@@ -2,16 +2,88 @@ name: feature-cleanup
 
 on:
   pull_request:
-    types: [closed]
+    types: [closed]           # merged o abbandonata: in entrambi i casi si pulisce
     branches: [dev]
+
+# stesso group di feature-deploy: destroy e deploy dello stesso branch non si sovrappongono
+concurrency:
+  group: ephemeral-${{ github.head_ref }}
+  cancel-in-progress: false
 
 jobs:
   cleanup:
     name: Destroy ephemeral copy
     runs-on: ubuntu-latest
     steps:
-      - name: Compute branch slug
-        id: slug
-        run: echo "slug=$(echo '${{ github.head_ref }}' | tr '/' '_')" >> "$GITHUB_OUTPUT"
-      - name: Mock destroy
-        run: echo "MOCK destroy -> prefix [${{ steps.slug.outputs.slug }}] (merged=${{ github.event.pull_request.merged }})"
+      - name: Check feature/* branch
+        id: check
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          case "$BRANCH" in
+            feature/*)
+              echo "matches=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "matches=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Branch '$BRANCH' non è feature/*: nessuna copia effimera da distruggere"
+              ;;
+          esac
+
+      # il branch può essere già stato cancellato dal merge: checkout dello SHA della PR
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.matches == 'true'
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Resolve target bundle
+        if: steps.check.outputs.matches == 'true'
+        id: meta
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          slug=$(echo "$BRANCH" | tr '/' '_' | tr '[:upper:]' '[:lower:]')
+          project=$(echo "$BRANCH" | cut -d/ -f2)      # feature/<project>/<country>/<desc>
+          country=$(echo "$BRANCH" | cut -d/ -f3)
+
+          # stessa risoluzione di feature-deploy: country case-insensitive, fallback sul bundle di progetto
+          country_bundle=""
+          if [ -d "packages/$project/countries" ]; then
+            for d in "packages/$project/countries"/*/; do
+              bn=$(basename "$d")
+              if [ "$(echo "$bn" | tr '[:upper:]' '[:lower:]')" = "$(echo "$country" | tr '[:upper:]' '[:lower:]')" ]; then
+                country_bundle="${d%/}/databricks.yml"
+                break
+              fi
+            done
+          fi
+          project_bundle="packages/$project/databricks.yml"
+
+          if [ -n "$country_bundle" ] && [ -f "$country_bundle" ]; then
+            bundle="$country_bundle"; scope="country ($country)"
+          elif [ -f "$project_bundle" ]; then
+            bundle="$project_bundle"; scope="project (shared)"
+          else
+            echo "::notice::Nessun databricks.yml per project=$project country=$country: niente da distruggere"
+            bundle=""; scope="none"
+          fi
+          {
+            echo "slug=$slug"
+            echo "bundle=$bundle"
+            echo "bundle_dir=$(dirname "${bundle:-.}")"
+            echo "scope=$scope"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: databricks/setup-cli@main
+        if: steps.check.outputs.matches == 'true' && steps.meta.outputs.bundle != ''
+
+      - name: Destroy ephemeral copy on dev
+        if: steps.check.outputs.matches == 'true' && steps.meta.outputs.bundle != ''
+        working-directory: ${{ steps.meta.outputs.bundle_dir }}
+        env:
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+          SLUG: ${{ steps.meta.outputs.slug }}
+        run: |
+          echo "Destroy: branch=${{ github.head_ref }} scope=${{ steps.meta.outputs.scope }} prefix=[$SLUG] merged=${{ github.event.pull_request.merged }}"
+          databricks bundle destroy -t dev --var="branch=$SLUG" --auto-approve
