@@ -50,5 +50,5 @@ targets:
     presets:
       name_prefix: ""
     workspace:
-      host: https://dbc-d01c4c3a-2fbf.cloud.databricks.com
+      host: https://dbc-6fe91c27-e36a.cloud.databricks.com
 
