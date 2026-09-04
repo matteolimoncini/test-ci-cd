@@ -1,1 +1,55 @@
-questo asset bundle è del progetto A, paese ES
+# Databricks Asset Bundle - projectA
+# Docs: https://docs.databricks.com/dev-tools/bundles/index.html
+bundle:
+  name: projectA
+
+variables:
+  notification_email:
+    description: Email address used for job run notifications.
+    default: data-team@example.com
+
+# Simple resources deployed by this bundle
+resources:
+  jobs:
+    projectA_sample_job:
+      name: "[${bundle.target}] projectA - sample job"
+      tags:
+        project: projectA
+        managed_by: dab
+      job_clusters:
+        - job_cluster_key: sample_cluster
+          new_cluster:
+            spark_version: 15.4.x-scala2.12
+            node_type_id: Standard_DS3_v2
+            num_workers: 1
+      tasks:
+        - task_key: ingest
+          job_cluster_key: sample_cluster
+          notebook_task:
+            notebook_path: ./ingest.py
+        - task_key: transform
+          depends_on:
+            - task_key: ingest
+          job_cluster_key: sample_cluster
+          notebook_task:
+            notebook_path: ./transform.py
+      schedule:
+        quartz_cron_expression: "0 0 6 * * ?"
+        timezone_id: Europe/Rome
+        pause_status: PAUSED
+      email_notifications:
+        on_failure:
+          - ${var.notification_email}
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://dbc-d01c4c3a-2fbf.cloud.databricks.com
+
+  prod:
+    mode: production
+    workspace:
+      host: https://dbc-d01c4c3a-2fbf.cloud.databricks.com
+
