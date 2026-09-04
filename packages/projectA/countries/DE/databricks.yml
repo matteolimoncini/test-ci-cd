@@ -39,7 +39,6 @@ resources:
 
 targets:
   dev:
-    mode: development
     default: true
     presets:
       name_prefix: "[dev][${var.branch}] "
