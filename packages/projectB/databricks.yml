@@ -1,4 +1,4 @@
-﻿# Databricks Asset Bundle - projectB (shared / project-level)
+# Databricks Asset Bundle - projectB (shared / project-level)
 # Fallback usato quando non esiste un bundle specifico per country.
 # Docs: https://docs.databricks.com/dev-tools/bundles/index.html
 bundle:
@@ -42,14 +42,14 @@ targets:
   dev:
     default: true
     presets:
-      name_prefix: "[dev][${var.branch}] "
+      name_prefix: "[dev]${var.branch} "
     workspace:
       host: https://dbc-d01c4c3a-2fbf.cloud.databricks.com
 
   prod:
     mode: production
     presets:
-      name_prefix: "[prod][${var.branch}] "
+      name_prefix: "[prod]${var.branch} "
     workspace:
       host: https://dbc-6fe91c27-e36a.cloud.databricks.com
 

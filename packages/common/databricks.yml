@@ -1,4 +1,4 @@
-﻿# Databricks Asset Bundle - common (risorse condivise tra i progetti)
+# Databricks Asset Bundle - common (risorse condivise tra i progetti)
 # Docs: https://docs.databricks.com/dev-tools/bundles/index.html
 bundle:
   name: common
@@ -35,14 +35,14 @@ targets:
   dev:
     default: true
     presets:
-      name_prefix: "[dev][${var.branch}] "
+      name_prefix: "[dev]${var.branch} "
     workspace:
       host: https://dbc-d01c4c3a-2fbf.cloud.databricks.com
 
   prod:
     mode: production
     presets:
-      name_prefix: "[prod][${var.branch}] "
+      name_prefix: "[prod]${var.branch} "
     workspace:
       host: https://dbc-6fe91c27-e36a.cloud.databricks.com
 
