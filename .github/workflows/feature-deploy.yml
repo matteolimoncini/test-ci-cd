@@ -91,5 +91,5 @@ jobs:
           SLUG: ${{ steps.meta.outputs.slug }}
         run: |
           echo "Ephemeral deploy: branch=${{ github.ref_name }} scope=${{ steps.meta.outputs.scope }} prefix=[$SLUG]"
-          databricks bundle validate -t dev --var="branch=[$SLUG]"
-          databricks bundle deploy   -t dev --var="branch=[$SLUG]"
+          databricks bundle validate -t dev --var="branch=[$SLUG]" --var="branch_slug=$SLUG"
+          databricks bundle deploy   -t dev --var="branch=[$SLUG]" --var="branch_slug=$SLUG"
