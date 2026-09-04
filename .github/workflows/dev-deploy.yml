@@ -4,10 +4,6 @@ on:
   push:
     branches: [dev]
 
-env:
-  # package "parte comune": se cambia, si rideployano tutti i bundle
-  COMMON_PACKAGE: common
-
 # i deploy su dev si accodano, mai due run in parallelo
 concurrency:
   group: dev-deploy
@@ -38,19 +34,14 @@ jobs:
           changed=$(git diff --name-only "$range")
           echo "File modificati ($range):"; echo "$changed"
 
-          common_changed=false
-          echo "$changed" | grep -q "^packages/$COMMON_PACKAGE/" && common_changed=true
-
           # regole, per ogni databricks.yml trovato sotto packages/:
-          #   1. parte comune modificata            -> deploy di tutti i bundle
-          #   2. package modificato fuori countries/ -> deploy di tutti i bundle del package
-          #   3. bundle country: modifiche nella sua dir -> deploy di quel bundle
+          #   1. package modificato fuori countries/     -> deploy di tutti i bundle del package
+          #   2. bundle country: modifiche nella sua dir -> deploy di quel bundle
           bundles=()
           for byml in $(find packages -name databricks.yml | sort); do
             dir=$(dirname "$byml")               # es. packages/projectA/countries/ES
             pkg=$(echo "$dir" | cut -d/ -f2)     # es. projectA
             deploy=false
-            $common_changed && deploy=true
             echo "$changed" | grep "^packages/$pkg/" | grep -qv "^packages/$pkg/countries/" && deploy=true
             case "$dir" in
               */countries/*) echo "$changed" | grep -q "^$dir/" && deploy=true ;;
