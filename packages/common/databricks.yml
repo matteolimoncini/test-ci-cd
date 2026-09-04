@@ -15,7 +15,7 @@ variables:
 resources:
   jobs:
     common_healthcheck_job:
-      name: "common - healthcheck"
+      name: "common - health"
       tags:
         scope: common
         managed_by: dab
