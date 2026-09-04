@@ -68,4 +68,4 @@ jobs:
           SLUG: ${{ steps.meta.outputs.slug }}
         run: |
           echo "Destroy: branch=${{ github.event.ref }} scope=${{ steps.meta.outputs.scope }} prefix=[$SLUG]"
-          databricks bundle destroy -t dev --var="branch=$SLUG" --auto-approve
+          databricks bundle destroy -t dev --var="branch=[$SLUG]" --var="branch_slug=$SLUG" --auto-approve

@@ -10,6 +10,9 @@ variables:
   branch:
     description: Slug del branch usato come prefisso per i deploy effimeri.
     default: ""
+  branch_slug:
+    description: Slug del branch usato per isolare il path di deploy effimero.
+    default: ""
 
 # Simple resources deployed by this bundle
 resources:
@@ -43,6 +46,7 @@ targets:
       name_prefix: "[dev]${var.branch} "
     workspace:
       host: https://dbc-d01c4c3a-2fbf.cloud.databricks.com
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/dev/${var.branch_slug}
 
   prod:
     mode: production
