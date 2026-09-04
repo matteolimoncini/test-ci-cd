@@ -1,46 +1,28 @@
 name: feature-cleanup
 
-on:
-  pull_request:
-    types: [closed]           # merged o abbandonata: in entrambi i casi si pulisce
-    branches: [dev]
+on: delete
 
 # stesso group di feature-deploy: destroy e deploy dello stesso branch non si sovrappongono
 concurrency:
-  group: ephemeral-${{ github.head_ref }}
+  group: ephemeral-${{ github.event.ref }}
   cancel-in-progress: false
 
 jobs:
   cleanup:
     name: Destroy ephemeral copy
+    # solo branch (non tag) e solo feature/*
+    if: github.event.ref_type == 'branch' && startsWith(github.event.ref, 'feature/')
     runs-on: ubuntu-latest
     steps:
-      - name: Check feature/* branch
-        id: check
-        env:
-          BRANCH: ${{ github.head_ref }}
-        run: |
-          case "$BRANCH" in
-            feature/*)
-              echo "matches=true" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              echo "matches=false" >> "$GITHUB_OUTPUT"
-              echo "::notice::Branch '$BRANCH' non è feature/*: nessuna copia effimera da distruggere"
-              ;;
-          esac
-
-      # il branch può essere già stato cancellato dal merge: checkout dello SHA della PR
+      # il branch non esiste più: si risolve il bundle dalla versione su dev
       - uses: actions/checkout@v4
-        if: steps.check.outputs.matches == 'true'
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: dev
 
       - name: Resolve target bundle
-        if: steps.check.outputs.matches == 'true'
         id: meta
         env:
-          BRANCH: ${{ github.head_ref }}
+          BRANCH: ${{ github.event.ref }}
         run: |
           slug=$(echo "$BRANCH" | tr '/' '_' | tr '[:upper:]' '[:lower:]')
           project=$(echo "$BRANCH" | cut -d/ -f2)      # feature/<project>/<country>/<desc>
@@ -64,7 +46,7 @@ jobs:
           elif [ -f "$project_bundle" ]; then
             bundle="$project_bundle"; scope="project (shared)"
           else
-            echo "::notice::Nessun databricks.yml per project=$project country=$country: niente da distruggere"
+            echo "::notice::Nessun databricks.yml su dev per project=$project country=$country: niente da distruggere"
             bundle=""; scope="none"
           fi
           {
@@ -75,15 +57,15 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - uses: databricks/setup-cli@main
-        if: steps.check.outputs.matches == 'true' && steps.meta.outputs.bundle != ''
+        if: steps.meta.outputs.bundle != ''
 
       - name: Destroy ephemeral copy on dev
-        if: steps.check.outputs.matches == 'true' && steps.meta.outputs.bundle != ''
+        if: steps.meta.outputs.bundle != ''
         working-directory: ${{ steps.meta.outputs.bundle_dir }}
         env:
           DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
           DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
           SLUG: ${{ steps.meta.outputs.slug }}
         run: |
-          echo "Destroy: branch=${{ github.head_ref }} scope=${{ steps.meta.outputs.scope }} prefix=[$SLUG] merged=${{ github.event.pull_request.merged }}"
+          echo "Destroy: branch=${{ github.event.ref }} scope=${{ steps.meta.outputs.scope }} prefix=[$SLUG]"
           databricks bundle destroy -t dev --var="branch=$SLUG" --auto-approve
