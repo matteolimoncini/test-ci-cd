@@ -4,39 +4,85 @@ on:
   push:
     branches: [dev]
 
+env:
+  # package "parte comune": se cambia, si rideployano tutti i bundle
+  COMMON_PACKAGE: common
+
+# i deploy su dev si accodano, mai due run in parallelo
+concurrency:
+  group: dev-deploy
+  cancel-in-progress: false
+
 jobs:
-  changes:
-    name: Detect changed packages
+  plan:
+    name: Detect bundles to deploy
     runs-on: ubuntu-latest
     outputs:
-      common:   ${{ steps.filter.outputs.common }}
-      projectA: ${{ steps.filter.outputs.projectA }}
-      projectB: ${{ steps.filter.outputs.projectB }}
+      bundles: ${{ steps.plan.outputs.bundles }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
         with:
-          filters: |
-            common:
-              - 'packages/common/**'
-            projectA:
-              - 'packages/projectA/**'
-            projectB:
-              - 'packages/projectB/**'
+          fetch-depth: 0
 
-  deploy-projectA:
-    name: Deploy projectA
-    needs: changes
-    if: needs.changes.outputs.projectA == 'true' || needs.changes.outputs.common == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "MOCK deploy projectA -> dev (branch=shared)"
+      - name: Changed files -> bundle list
+        id: plan
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # file modificati dal push (fallback su HEAD^ per force-push / primo push)
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BEFORE" 2>/dev/null; then
+            range="HEAD^..HEAD"
+          else
+            range="$BEFORE..HEAD"
+          fi
+          changed=$(git diff --name-only "$range")
+          echo "File modificati ($range):"; echo "$changed"
 
-  deploy-projectB:
-    name: Deploy projectB
-    needs: changes
-    if: needs.changes.outputs.projectB == 'true' || needs.changes.outputs.common == 'true'
+          common_changed=false
+          echo "$changed" | grep -q "^packages/$COMMON_PACKAGE/" && common_changed=true
+
+          # regole, per ogni databricks.yml trovato sotto packages/:
+          #   1. parte comune modificata            -> deploy di tutti i bundle
+          #   2. package modificato fuori countries/ -> deploy di tutti i bundle del package
+          #   3. bundle country: modifiche nella sua dir -> deploy di quel bundle
+          bundles=()
+          for byml in $(find packages -name databricks.yml | sort); do
+            dir=$(dirname "$byml")               # es. packages/projectA/countries/ES
+            pkg=$(echo "$dir" | cut -d/ -f2)     # es. projectA
+            deploy=false
+            $common_changed && deploy=true
+            echo "$changed" | grep "^packages/$pkg/" | grep -qv "^packages/$pkg/countries/" && deploy=true
+            case "$dir" in
+              */countries/*) echo "$changed" | grep -q "^$dir/" && deploy=true ;;
+            esac
+            $deploy && bundles+=("$dir")
+          done
+
+          if [ ${#bundles[@]} -eq 0 ]; then
+            json='[]'
+          else
+            json=$(printf '%s\n' "${bundles[@]}" | jq -R . | jq -sc .)
+          fi
+          echo "bundles=$json" >> "$GITHUB_OUTPUT"
+          echo "Bundle da deployare: $json"
+
+  deploy:
+    name: Deploy ${{ matrix.bundle }}
+    needs: plan
+    if: needs.plan.outputs.bundles != '[]'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        bundle: ${{ fromJSON(needs.plan.outputs.bundles) }}
     steps:
-      - run: echo "MOCK deploy projectB -> dev (branch=shared)"
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - name: Deploy to dev (shared instance)
+        working-directory: ${{ matrix.bundle }}
+        env:
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+        run: |
+          databricks bundle validate -t dev
+          databricks bundle deploy -t dev
