@@ -19,21 +19,13 @@ resources:
       tags:
         project: projectA
         managed_by: dab
-      job_clusters:
-        - job_cluster_key: sample_cluster
-          new_cluster:
-            spark_version: 15.4.x-scala2.12
-            node_type_id: Standard_DS3_v2
-            num_workers: 1
       tasks:
         - task_key: ingest
-          job_cluster_key: sample_cluster
           notebook_task:
             notebook_path: ./ingest.py
         - task_key: transform
           depends_on:
             - task_key: ingest
-          job_cluster_key: sample_cluster
           notebook_task:
             notebook_path: ./transform.py
       schedule:
