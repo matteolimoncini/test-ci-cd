@@ -7,12 +7,15 @@ variables:
   notification_email:
     description: Email address used for job run notifications.
     default: data-team@example.com
+  branch:
+    description: Slug del branch usato come prefisso per i deploy effimeri.
+    default: ""
 
 # Simple resources deployed by this bundle
 resources:
   jobs:
     projectA_sample_job:
-      name: "[${bundle.target}] projectA - sample job"
+      name: "[${bundle.target}][${var.branch}] projectA - sample job"
       tags:
         project: projectA
         managed_by: dab
