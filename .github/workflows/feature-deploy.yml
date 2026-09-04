@@ -1,7 +1,13 @@
 name: feature-deploy
 
 on:
-  workflow_dispatch:            # bottone "Run workflow": deploy on-demand da qualsiasi branch
+  workflow_dispatch:            # bottone "Run workflow": deploy on-demand dal feature branch selezionato
+
+# deploy e destroy dello stesso branch non girano in parallelo
+# (stesso group di feature-cleanup)
+concurrency:
+  group: ephemeral-${{ github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -19,19 +25,32 @@ jobs:
               exit 1
               ;;
           esac
+
       - uses: actions/checkout@v4
 
       - name: Resolve target bundle
         id: meta
         env:
-          BRANCH: ${{ github.head_ref || github.ref_name }}
+          BRANCH: ${{ github.ref_name }}
         run: |
-          slug=$(echo "$BRANCH" | tr '/' '_')
+          slug=$(echo "$BRANCH" | tr '/' '_' | tr '[:upper:]' '[:lower:]')
           project=$(echo "$BRANCH" | cut -d/ -f2)      # feature/<project>/<country>/<desc>
           country=$(echo "$BRANCH" | cut -d/ -f3)
-          country_bundle="packages/$project/countries/$country/databricks.yml"
+
+          # lookup case-insensitive della dir country (branch 'es' vs dir 'ES')
+          country_bundle=""
+          if [ -d "packages/$project/countries" ]; then
+            for d in "packages/$project/countries"/*/; do
+              bn=$(basename "$d")
+              if [ "$(echo "$bn" | tr '[:upper:]' '[:lower:]')" = "$(echo "$country" | tr '[:upper:]' '[:lower:]')" ]; then
+                country_bundle="${d%/}/databricks.yml"
+                break
+              fi
+            done
+          fi
           project_bundle="packages/$project/databricks.yml"
-          if [ -f "$country_bundle" ]; then
+
+          if [ -n "$country_bundle" ] && [ -f "$country_bundle" ]; then
             bundle="$country_bundle"; scope="country ($country)"
           else
             bundle="$project_bundle"; scope="project (shared)"
@@ -41,6 +60,7 @@ jobs:
             echo "project=$project"
             echo "country=$country"
             echo "bundle=$bundle"
+            echo "bundle_dir=$(dirname "$bundle")"
             echo "scope=$scope"
           } >> "$GITHUB_OUTPUT"
 
@@ -61,20 +81,15 @@ jobs:
             exit 1
           fi
 
-      - name: Mock deploy
+      - uses: databricks/setup-cli@main
+
+      - name: Deploy ephemeral copy to dev
+        working-directory: ${{ steps.meta.outputs.bundle_dir }}
         env:
-          BRANCH:  ${{ github.head_ref || github.ref_name }}
-          SLUG:    ${{ steps.meta.outputs.slug }}
-          PROJECT: ${{ steps.meta.outputs.project }}
-          COUNTRY: ${{ steps.meta.outputs.country }}
-          BUNDLE:  ${{ steps.meta.outputs.bundle }}
-          SCOPE:   ${{ steps.meta.outputs.scope }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+          SLUG: ${{ steps.meta.outputs.slug }}
         run: |
-          bundle_dir=$(dirname "$BUNDLE")
-          echo "MOCK ephemeral deploy"
-          echo "  branch : $BRANCH"
-          echo "  project: $PROJECT"
-          echo "  country: $COUNTRY"
-          echo "  scope  : $SCOPE"
-          echo "  bundle : $BUNDLE"
-          echo "MOCK cmd: cd $bundle_dir && databricks bundle deploy -t dev --var branch=$SLUG"
+          echo "Ephemeral deploy: branch=${{ github.ref_name }} scope=${{ steps.meta.outputs.scope }} prefix=[$SLUG]"
+          databricks bundle validate -t dev --var="branch=$SLUG"
+          databricks bundle deploy   -t dev --var="branch=$SLUG"
